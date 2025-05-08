@@ -33,22 +33,39 @@
     THIS SOFTWARE.
 */
 #include "mcc_generated_files/system/system.h"
+#include <stdbool.h>
+#include <math.h>
 
 /*
     Main application
 */
 
-// ユーザーの割り込み関数のプロトタイプ
+//変数
+_Bool onTMR1; 
+
+
+// 関数プロトタイプ
 void MyTMR1_ISR(void);
 
 // ユーザーの割り込み関数
 void MyTMR1_ISR(void){
-    TP_Toggle();
+    onTMR1 = true;
 }
 
 int main(void)
 {
+    unsigned int fs =   44100;  /* 標本化周波数 */
+    unsigned int f0 =     440;  /* 周波数 */
+    unsigned int T  = fs / f0;  /*1周期分のインデックス値*/
+
+    double nowT     =       0;  /*現在の周期インデックス値*/
+    double amp      =     0.1;  /*振幅*/
+    double dblTemp  = 0;
+    int pwmTemp  = 0;
+     
     SYSTEM_Initialize();
+
+    onTMR1 = false;
 
      // ユーザーの割り込み関数を指定する
     TMR1_OverflowCallbackRegister(MyTMR1_ISR);
@@ -60,9 +77,26 @@ int main(void)
     // Enable the Peripheral Interrupts 
     INTERRUPT_PeripheralInterruptEnable(); 
 
-
    
     while(1)
     {
+        if (onTMR1){
+            /*
+            サイン波
+            std::cout << a * sin(2.0 * M_PI * f0 * nowT / fs) << "\n"
+            */
+            dblTemp = 6.28 * f0 * nowT / fs;
+            dblTemp = amp * sin(dblTemp);
+            pwmTemp = (unsigned int)((dblTemp+1) * 512);
+            
+            if ( pwmTemp > 1023) pwmTemp=1023;
+            if ( pwmTemp < 0) pwmTemp=0;
+            PWM_LFO_LoadDutyValue( pwmTemp );
+                    
+            nowT = nowT + 1;
+            if (nowT >= T) nowT = nowT - T;
+
+            onTMR1 = false;
+        }
     }    
 }

@@ -38,7 +38,6 @@
 
 #include <xc.h>
 #include "../tmr1.h"
-#include "../../system/pins.h"
 
 static volatile uint16_t timer1ReloadVal;
 static void (*TMR1_OverflowCallback)(void);
@@ -58,10 +57,12 @@ void TMR1_Initialize(void)
 
     T1GATE = (0 << _T1GATE_GSS_POSN);  // GSS T1GPPS
 
-    T1CLK = (1 << _T1CLK_CS_POSN);  // CS FOSC/4
+    T1CLK = (2 << _T1CLK_CS_POSN);  // CS FOSC
 
-    TMR1H = 0xFF;              // Period 22.875us; Timer clock 8000000 Hz;
-    TMR1L = 0x49;
+    TMR1H = 0xFD;              // Period 22.6875us; Timer clock 32000000 Hz;
+    TMR1L = 0x2A;
+    //TMR1H = 0xFE;              // Period 22.6875us; Timer clock 32000000 Hz;
+    //TMR1L = 0x24;
 
     timer1ReloadVal=((uint16_t)TMR1H << 8) | TMR1L;
 	
@@ -73,7 +74,7 @@ void TMR1_Initialize(void)
 	PIR1bits.TMR1GIF = 0U;
 	
     T1CON = (1 << _T1CON_TMR1ON_POSN)   // TMR1ON enabled
-        | (0 << _T1CON_T1RD16_POSN)   // T1RD16 disabled
+        | (1 << _T1CON_T1RD16_POSN)   // T1RD16 enabled
         | (0 << _T1CON_nT1SYNC_POSN)   // nT1SYNC synchronize
         | (0 << _T1CON_CKPS_POSN);  // CKPS 1:1
 }
@@ -227,13 +228,11 @@ void TMR1_GateCallbackRegister(void (*CallbackHandler)(void))
 static void TMR1_DefaultOverflowCallback(void)
 {
     // Default overflow callback
-   //TP_Toggle();
 }
 
 static void TMR1_DefaultGateCallback(void)
 {
     // Default Gate callback
-    //TP_Toggle();
 }
 /**
   End of File
