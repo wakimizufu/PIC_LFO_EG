@@ -1,0 +1,37 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\workspace\\git_SAER\\PIC_LFO_EG\\VCTest_DDS24bit\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{8F0F519F-CB4C-40F2-B640-4202D4E7D3E8}|VCTest_DDS24bit.vcxproj|C:\\workspace\\git_SAER\\PIC_LFO_EG\\VCTest_DDS24bit\\VCTest_DDS24bit.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{8F0F519F-CB4C-40F2-B640-4202D4E7D3E8}|VCTest_DDS24bit.vcxproj|solutionrelative:VCTest_DDS24bit.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 0,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "VCTest_DDS24bit.cpp",
+              "DocumentMoniker": "C:\\workspace\\git_SAER\\PIC_LFO_EG\\VCTest_DDS24bit\\VCTest_DDS24bit.cpp",
+              "RelativeDocumentMoniker": "VCTest_DDS24bit.cpp",
+              "ToolTip": "C:\\workspace\\git_SAER\\PIC_LFO_EG\\VCTest_DDS24bit\\VCTest_DDS24bit.cpp",
+              "RelativeToolTip": "VCTest_DDS24bit.cpp",
+              "ViewState": "AQIAAAsAAAAAAAAAAADwvy8AAAABAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
+              "WhenOpened": "2025-05-10T23:03:15.545Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

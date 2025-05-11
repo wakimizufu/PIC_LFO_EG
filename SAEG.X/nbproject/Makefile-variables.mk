@@ -4,7 +4,7 @@
 # NOCDDL
 #
 CND_BASEDIR=`pwd`
-# default configuration
-CND_ARTIFACT_DIR_default=dist/default/production
-CND_ARTIFACT_NAME_default=SAEG.X.production.hex
-CND_ARTIFACT_PATH_default=dist/default/production/SAEG.X.production.hex
+# NewConfiguration-2 configuration
+CND_ARTIFACT_DIR_NewConfiguration-2=dist/NewConfiguration-2/production
+CND_ARTIFACT_NAME_NewConfiguration-2=SAEG.X.production.hex
+CND_ARTIFACT_PATH_NewConfiguration-2=dist/NewConfiguration-2/production/SAEG.X.production.hex

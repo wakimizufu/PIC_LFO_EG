@@ -24,10 +24,10 @@ uint8_t sineTbl[256] = {
 
 int main()
 {
-	uint32_t accmulator = 0;
-	uint16_t clock = 4000;
-	uint16_t fout = 440;
-	uint32_t tuningWord = pow(2, 32) * fout / clock;
+	uint32_t accmulator = 0;							//累積加算器
+	uint16_t clock = 500;								//演算クロック
+	double fout = 30;									//出力周波数 0.1～30Hz
+	uint32_t tuningWord = pow(2, 32) * fout / clock;	//加算データ
 
 	for (uint32_t n = 0; n < 1000; n++) {
 		uint8_t count = (accmulator >> 24);
