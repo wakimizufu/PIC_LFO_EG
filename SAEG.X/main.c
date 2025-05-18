@@ -61,7 +61,9 @@ const unsigned int sineTbl[256] = {
 510,514,520,526,532,538,542,548,554,560,566,572,578,584,590,596,602,608,616,622,628,634};
 */
 
-const unsigned int sineTbl[256] = {
+//LFO サイン波テーブル
+# define SINE_CURVE_LENGTH 256
+const unsigned int sineTbl[SINE_CURVE_LENGTH] = {
 358,366,375,383,392,403,411,420,428,436,445,453,462,470,478,487,495,501,
 509,518,526,534,540,548,557,562,571,576,585,590,596,604,610,616,621,627,
 632,638,644,649,655,658,663,666,672,674,680,683,686,688,694,697,700,700,
@@ -77,19 +79,86 @@ const unsigned int sineTbl[256] = {
 61,67,72,78,84,89,95,100,106,112,120,126,131,140,145,154,159,168,
 176,182,190,198,207,215,221,229,238,246,254,263,271,280,288,296,305,313,324,333,341,350};
 
+//ADSR カーブテーブル
+# define EXP_CURVE_LENGTH 256
+const unsigned int curveTbl[EXP_CURVE_LENGTH] = {
+0,13,27,40,53,66,79,91,103,115,127,138,149,161,171,182,192,
+202,212,222,231,241,250,259,268,277,285,294,302,310,317,325,333,340,
+347,354,361,368,375,382,389,395,401,407,413,419,424,430,436,441,447,
+452,457,462,467,472,476,481,485,490,494,499,503,507,511,515,519,523,
+527,530,534,537,541,544,548,550,554,557,560,563,566,569,572,575,577,
+580,583,585,588,590,592,595,597,599,602,604,606,609,611,613,615,616,
+618,620,622,624,625,627,629,631,632,634,636,637,639,640,641,643,644,
+646,647,648,650,651,653,653,655,656,657,658,660,660,662,662,664,665,
+665,667,667,668,669,670,671,672,673,674,674,675,676,676,677,679,679,
+680,681,681,681,682,683,683,684,685,686,686,686,687,688,688,689,689,
+690,690,690,691,692,692,693,693,693,694,695,695,695,695,696,696,697,
+697,697,697,698,698,699,699,700,700,700,700,700,701,701,702,702,702,
+702,702,702,703,703,704,704,704,704,704,704,704,705,705,705,706,706,
+706,706,707,707,707,707,707,707,707,707,707,708,708,708,708,708,709,
+709,709,709,709,709,709,709,709,709,709,710,710,710,710,710,710,710,711};
+
+
+//エンベロープ ステータス
+enum ENV_ST {
+    ATK,    //アタック
+    DCY,    //ディケイ
+    SUS,    //サスティン
+    REL     //リリース
+};
+
+
 //ADC変換タイミング(単位:2msec)
 #define ADC_CONVERT_TIME 100 
 
 //ADC 8bitに対するLFOステップ周波数(単位:Hz))
 #define LFO_STEP_TIME 0.117 
 
+
+
+//エンベロープ関連
+_Bool envGate = false;
+enum ENV_ST env1_ST = ATK;  //現在のエンベロープ ステータス
+uint16_t envCount = 0;  //エンベロープカウンタ
+uint16_t envDAC   = 0;  //エンベロープ用DAC
+uint16_t Atm = 200;     //アタック 2ms:40?1.5s:3000
+uint16_t Dtm = 2000;    //ディケイ 2ms:40?5s:10000
+uint16_t Slv = 500;     //サスティン レベル(0?1023)
+uint16_t Rtm = 1000;    //リリース 2ms:40?5s:10000
+
+
 // 関数プロトタイプ
 void MyTMR1_ISR(void);
+void onEdgeGate_ISR(void);
+uint16_t getExpIndex(uint16_t value , uint16_t max);
 
-// ユーザーの割り込み関数
+// 2000Hz=0.5ms タイマー割込み
 void MyTMR1_ISR(void){
     onTMR1 = true;
 }
+
+// GATE 入力割込み
+void onEdgeGate_ISR(void){
+    
+    TP_LAT = Gate_GetValue();
+    envGate = Gate_GetValue();
+    
+    if ( envGate ){
+        env1_ST = ATK;
+        envCount = 0;
+    } else if (!envGate) {
+        env1_ST = REL;
+        envCount = 0;
+    }
+}
+
+//カーブテーブル値取得関数
+uint16_t getExpIndex(uint16_t value , uint16_t max) {
+    uint16_t temp = (value / max) * (EXP_CURVE_LENGTH - 1);
+    if (temp > (EXP_CURVE_LENGTH - 1) )temp = (EXP_CURVE_LENGTH - 1);
+    return temp;
+}
+
 
 int main(void)
 {
@@ -102,9 +171,10 @@ int main(void)
     SYSTEM_Initialize();
 
     onTMR1 = false;
-
-     TMR1_OverflowCallbackRegister(MyTMR1_ISR);
+    TMR1_OverflowCallbackRegister(MyTMR1_ISR);
     TMR1_Start();
+
+    Gate_SetInterruptHandler(onEdgeGate_ISR);
     
     // Enable the Global Interrupts  
     INTERRUPT_GlobalInterruptEnable(); 
@@ -121,21 +191,34 @@ int main(void)
            
     while(1)
     {
+        // 2000Hz=0.5ms タイマー割込み
         if (onTMR1){
             
+            //サイン波テーブルから取得
             count = accmulator >> 16;
             dacval = sineTbl[count];
+            
+            //方形波
+            if (dacval >= 358) {
+                dacval=714;
+            } else {
+                dacval=0;
+            }
+            
+            //LFO⇒PWM2 設定値を変更
             PWM_LFO_LoadDutyValue(dacval);
-
             //PWM_LFO_LoadDutyValue(ADC_ConversionResultGet());
             
+            //加算累積器へ加算
             accmulator += tuningWord;
    
             onLFORate--;            
             onTMR1 = false;
         }
         
+        //LFO RATE ADC値をonLFORateへ反映
         if (0 == onLFORate){
+           ADC_ChannelSelect(LFORATE); //ADC_CHANNEL_ANA2
            ADC_ConversionStart();
            while(!ADC_IsConversionDone());
             
