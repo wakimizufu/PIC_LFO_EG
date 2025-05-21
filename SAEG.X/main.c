@@ -67,6 +67,7 @@ const unsigned int sineTbl[SINE_CURVE_LENGTH] = {
 
 //ADSR カーブテーブル
 # define EXP_CURVE_LENGTH 256
+# define EXP_CURVE_MAX_VALUE 1023
 /*
 const unsigned int curveTbl[EXP_CURVE_LENGTH] = {
 0,13,27,40,53,66,79,91,103,115,127,138,149,161,171,182,192,
@@ -127,10 +128,10 @@ _Bool envGate = false;
 enum ENV_ST env1_ST = EMP;  //現在のエンベロープ ステータス
 uint16_t envCount = 0;  //エンベロープカウンタ
 uint16_t envDAC   = 0;  //エンベロープ用DAC
-uint16_t Atm = 200;     //アタック 2ms:40?1.5s:3000
-uint16_t Dtm = 2000;    //ディケイ 2ms:40?5s:10000
-uint16_t Slv = 500;     //サスティン レベル(0?1023)
-uint16_t Rtm = 1000;    //リリース 2ms:40?5s:10000
+uint16_t Atm = 50;     //アタック 2ms:4-1.5s:300
+uint16_t Dtm = 700;    //ディケイ 2ms:4-5s:1000
+uint16_t Slv = 300;     //サスティン レベル(0-1023)
+uint16_t Rtm = 40;    //リリース 2ms:4-5s:1000
 uint16_t Rpoint = 0;
 
 
@@ -138,7 +139,7 @@ uint16_t Rpoint = 0;
 void MyTMR1_ISR(void);
 void onEdgeGate_ISR(void);
 uint16_t getExpIndex(uint16_t value , uint16_t max);
-void genEnvelope(void);
+void setEnvelope(void);
 
 // 2000Hz=0.5ms タイマー割込み
 void MyTMR1_ISR(void){
@@ -162,14 +163,15 @@ void onEdgeGate_ISR(void){
 
 //カーブテーブル値取得関数
 uint16_t getExpIndex(uint16_t value , uint16_t max) {
-    uint16_t temp = (value / max) * (EXP_CURVE_LENGTH - 1);
+    double temp = (double)value / (double)max;
+    temp = temp * (EXP_CURVE_LENGTH - 1);
     if (temp > (EXP_CURVE_LENGTH - 1) )temp = (EXP_CURVE_LENGTH - 1);
-    return temp;
+    return (uint16_t)temp;
 }
 
 
-
-void genEnvelope (){
+//エンベロープジェネレータ実行
+void setEnvelope (){
 
 	double dTemp;
 	
@@ -180,7 +182,9 @@ void genEnvelope (){
 
 		case ATK:    //アタック
 			if ( envCount < Atm ) {
-				Rpoint = curveTbl[getExpIndex(envCount, Atm)];
+                Rpoint = getExpIndex(envCount, Atm);
+				Rpoint = curveTbl[Rpoint];
+       			envDAC	= Rpoint;
 			} else if ( envCount >= Atm ) {
 				env1_ST = DCY;
 				envCount = 0;
@@ -189,9 +193,10 @@ void genEnvelope (){
 
 		case DCY:    //ディケイ
 			if ( envCount < Dtm ) {
-                dTemp = (double)1023 - curveTbl[getExpIndex(envCount, Dtm)];
-                dTemp = Slv + ((1023 - Slv) * (dTemp/1023));
+                dTemp = (double)EXP_CURVE_MAX_VALUE - curveTbl[getExpIndex(envCount, Dtm)];
+                dTemp = Slv + ((EXP_CURVE_MAX_VALUE - Slv) * (dTemp/EXP_CURVE_MAX_VALUE));
                 Rpoint = (uint16_t)dTemp;
+       			envDAC	= Rpoint;
 			} else if ( envCount >= Dtm ) {
 				env1_ST = SUS;
 				envCount = 0;
@@ -200,12 +205,16 @@ void genEnvelope (){
 
 		case SUS:    //サスティン
 			envDAC	=	Slv;
+            Rpoint = Slv;
+            envCount = 0;
 			break;
 
 		case REL:    //リリース
 			if ( envCount < Rtm ) {
-                dTemp = (double)1023 - curveTbl[getExpIndex(envCount, Rtm)];
-                dTemp = ( Rpoint * (dTemp / 1023));
+                dTemp = (double)EXP_CURVE_MAX_VALUE - curveTbl[getExpIndex(envCount, Rtm)];
+                dTemp = dTemp / (double)EXP_CURVE_MAX_VALUE;
+                dTemp =  Rpoint * dTemp;
+       			envDAC	= (uint16_t)dTemp;
 			}  else if ( envCount >= Rtm ) {
                 env1_ST = EMP;
                 envDAC	=	0;
@@ -262,13 +271,13 @@ int main(void)
             dacval = sineTbl[count];
             
             //方形波
-            /*
+            
             if (dacval >= 358) {
                 dacval=714;
             } else {
                 dacval=0;
             }
-             */
+            
             
             //LFO⇒PWM2 設定値を変更
             PWM_LFO_LoadDutyValue(dacval);
@@ -277,6 +286,9 @@ int main(void)
             //加算累積器へ加算
             accmulator += tuningWord;
    
+            //エンベロープジェネレータ実行
+            setEnvelope();
+
             onLFORate--;            
             onTMR1 = false;
         }
