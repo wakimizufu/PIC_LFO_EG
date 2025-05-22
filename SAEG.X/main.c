@@ -121,7 +121,10 @@ enum ENV_ST {
 //ADC 8bitに対するLFOステップ周波数(単位:Hz))
 #define LFO_STEP_TIME 0.117 
 
-
+//LFO関連
+unsigned int clock;	
+double fout;
+double tuningWord;    //double tuningWord = (pow(2, 32) * fout) / clock;
 
 //エンベロープ関連
 _Bool envGate = false;
@@ -134,12 +137,23 @@ uint16_t Slv = 300;     //サスティン レベル(0-1023)
 uint16_t Rtm = 40;    //リリース 2ms:4-5s:1000
 uint16_t Rpoint = 0;
 
+//ADC ステータス
+enum ADC_ST {
+    TmLFO,    //LFO周波数
+    TmATK,    //アタックタイム
+    TmDCY,    //ディケイタイム
+    LvSUS,    //サスティンレベル
+    TmREL     //リリースタイム
+};
+enum ADC_ST adc_ST = TmLFO;  //現在のADCステータス
+
 
 // 関数プロトタイプ
 void MyTMR1_ISR(void);
 void onEdgeGate_ISR(void);
 uint16_t getExpIndex(uint16_t value , uint16_t max);
 void setEnvelope(void);
+void cnvADC(void);
 
 // 2000Hz=0.5ms タイマー割込み
 void MyTMR1_ISR(void){
@@ -232,13 +246,74 @@ void setEnvelope (){
 	PWM_DAC_LoadDutyValue(envDAC);
 }
 
+
+//ADCコンバータ⇒各変数を更新
+void cnvADC(){
+
+	switch ( adc_ST ) {
+		case TmLFO:    //LFO周波数
+			ADC_ChannelSelect(LFORATE); //ADC_CHANNEL_ANA2
+			break;
+		case TmATK:    //アタックタイム
+			ADC_ChannelSelect(ATTACK); //ADC_CHANNEL_ANB7
+			break;
+		case TmDCY:    //ディケイタイム
+			ADC_ChannelSelect(DECAY); //ADC_CHANNEL_ANC3
+			break;
+		case LvSUS:    //サスティンレベル
+			ADC_ChannelSelect(SUSTAIN); //ADC_CHANNEL_ANC6
+			break;
+		case TmREL:     //リリースタイム
+			ADC_ChannelSelect(RELEASE); //ADC_CHANNEL_ANC7
+			break;
+		default:
+			break;
+	}
+
+	ADC_ConversionStart();
+	while(!ADC_IsConversionDone());
+
+	switch ( adc_ST ) {
+		case TmLFO:    //LFO周波数
+			fout = ( (ADC_ConversionResultGet()>>2) * LFO_STEP_TIME) + LFO_STEP_TIME;
+			tuningWord = 0x01000000 * fout / clock;
+			adc_ST	=	TmATK;
+			break;
+
+		case TmATK:   //アタックタイム
+			Atm = (ADC_ConversionResultGet()>>1) | 0x004;     //2ms:4 - 2.5s:512
+			adc_ST	=	TmDCY;
+			break;
+
+		case TmDCY:    //ディケイタイム
+			Dtm = ADC_ConversionResultGet() | 0x004;	//2ms:4 - 5s:1023
+			adc_ST	=	LvSUS;
+			break;
+
+		case LvSUS:    //サスティンレベル
+			Slv = ADC_ConversionResultGet();	//0 - 1023
+			adc_ST	=	TmREL;
+			break;
+
+		case TmREL:    //リリースタイム
+			Rtm = ADC_ConversionResultGet() | 0x004;	//2ms:4 - 5s:1023
+			adc_ST	=	TmLFO;
+			break;
+
+		default:
+			break;
+	}
+}
+
+
+
 int main(void)
 {
     
     __uint24 accmulator = 0;
-	unsigned int clock = 4000;	
-	double fout = 10;
-    double tuningWord = 0x01000000 * fout / clock;    //double tuningWord = (pow(2, 32) * fout) / clock;
+    clock = 4000;	
+    fout = 10;
+    tuningWord = 0x01000000 * fout / clock;    //double tuningWord = (pow(2, 32) * fout) / clock;
     
     SYSTEM_Initialize();
 
@@ -293,14 +368,9 @@ int main(void)
             onTMR1 = false;
         }
         
-        //LFO RATE ADC値をonLFORateへ反映
+        //ADCコンバータ⇒各変数を更新
         if (0 == onLFORate){
-           ADC_ChannelSelect(LFORATE); //ADC_CHANNEL_ANA2
-           ADC_ConversionStart();
-           while(!ADC_IsConversionDone());
-            
-           fout = ( (ADC_ConversionResultGet()>>2) * LFO_STEP_TIME) + LFO_STEP_TIME;
-           tuningWord = 0x01000000 * fout / clock;
+           cnvADC();
            onLFORate=ADC_CONVERT_TIME;
         }
     }    
