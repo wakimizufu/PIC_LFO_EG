@@ -124,7 +124,9 @@ enum ENV_ST {
 //LFO関連
 unsigned int clock;	
 double fout;
-double tuningWord;    //double tuningWord = (pow(2, 32) * fout) / clock;
+double tuningWord;               //double tuningWord = (pow(2, 32) * fout) / clock;
+uint16_t LFODEtm = 0;           //LFOディレイタイム 0ms:0-1.25s:256
+uint16_t LFODelayCount = 0;     //LFOディレイタイム用カウント
 
 //エンベロープ関連
 _Bool envGate = false;
@@ -140,6 +142,7 @@ uint16_t Rpoint = 0;
 //ADC ステータス
 enum ADC_ST {
     TmLFO,    //LFO周波数
+    DeLFO,    //LFOディレイタイム
     TmATK,    //アタックタイム
     TmDCY,    //ディケイタイム
     LvSUS,    //サスティンレベル
@@ -169,6 +172,7 @@ void onEdgeGate_ISR(void){
     if ( envGate ){
         env1_ST = ATK;
         envCount = 0;
+        LFODelayCount = LFODEtm;     //LFOディレイタイム用カウント
     } else if (!envGate) {
         env1_ST = REL;
         envCount = 0;
@@ -254,6 +258,9 @@ void cnvADC(){
 		case TmLFO:    //LFO周波数
 			ADC_ChannelSelect(LFORATE); //ADC_CHANNEL_ANA2
 			break;
+		case DeLFO:    //LFOディレイタイム
+			ADC_ChannelSelect(LFODELAY); //ADC_CHANNEL_ANC0
+			break;
 		case TmATK:    //アタックタイム
 			ADC_ChannelSelect(ATTACK); //ADC_CHANNEL_ANB7
 			break;
@@ -277,14 +284,16 @@ void cnvADC(){
 		case TmLFO:    //LFO周波数
 			fout = ( (ADC_ConversionResultGet()>>2) * LFO_STEP_TIME) + LFO_STEP_TIME;
 			tuningWord = 0x01000000 * fout / clock;
-			adc_ST	=	TmATK;
+			adc_ST	=	DeLFO;
 			break;
-
+		case DeLFO:    //LFOディレイタイム
+            LFODEtm = ADC_ConversionResultGet()>>2;     //LFOディレイタイム 0ms:0-1.25s:256
+         	adc_ST	= TmATK;   
+            break;
 		case TmATK:   //アタックタイム
 			Atm = (ADC_ConversionResultGet()>>1) | 0x004;     //2ms:4 - 2.5s:512
 			adc_ST	=	TmDCY;
 			break;
-
 		case TmDCY:    //ディケイタイム
 			Dtm = ADC_ConversionResultGet() | 0x004;	//2ms:4 - 5s:1023
 			adc_ST	=	LvSUS;
@@ -345,15 +354,35 @@ int main(void)
             count = accmulator >> 16;
             dacval = sineTbl[count];
             
+
+            if ( 0 == LFODelayCount){
+                PWM_DAC_LoadDutyValue(dacval);
+            } else if ( 0 != LFODelayCount){
+                PWM_DAC_LoadDutyValue(511);
+                LFODelayCount--;
+            }
+                    
+                
             //方形波
-            
-            if (dacval >= 358) {
-                dacval=714;
+            /*
+            if (dacval >= 512) {
+                dacval=1023;
             } else {
                 dacval=0;
             }
+            */ 
             
-            
+            //三角波
+             if (count<=0x3F){
+                dacval = 0x1FF + ( ( 0x00003F & count) <<3);
+            } else if (count<=0x7F){
+                dacval = 0x3FF - ( ( 0x00003F & count) <<3);
+            } else if (count<=0xBF){
+                dacval = 0x1FF - ( ( 0x00003F & count) <<3);
+            } else if (count<=0xFF){
+                dacval = ( ( 0x00003F & count) <<3);;
+            }
+                
             //LFO⇒PWM2 設定値を変更
             PWM_LFO_LoadDutyValue(dacval);
             //PWM_LFO_LoadDutyValue(ADC_ConversionResultGet());
@@ -362,7 +391,7 @@ int main(void)
             accmulator += tuningWord;
    
             //エンベロープジェネレータ実行
-            setEnvelope();
+            //setEnvelope();
 
             onLFORate--;            
             onTMR1 = false;
